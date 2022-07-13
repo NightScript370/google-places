@@ -1,377 +1,295 @@
-/* https://github.com/peledies/google-places */
-(function($) {
+const defaultGooglePlacesSettings = {
+	placeId: 'ChIJN1t_tDeuEmsRUsoyG83frY4' // placeId provided by google api documentation
+  , render: ['reviews']
+  , min_rating: 0
+  , max_rows: 0
+  , map_plug_id: 'map-plug'
+  , rotateTime: false
+  , shorten_names: true
+  , schema:{
+		displayElement: '#schema'
+	  , type: 'Store'
+	  , beforeText: 'Google Users Have Rated'
+	  , middleText: 'based on'
+	  , afterText: 'ratings and reviews'
+	  , image: null
+	  , priceRange: null
+  }
+  , address:{
+	  displayElement: "#google-address"
+	}
+  , phone:{
+	  displayElement: "#google-phone"
+  }
+  , staticMap:{
+		displayElement: "#google-static-map"
+	  , width: 512
+	  , height: 512
+	  , zoom: 17
+	  , type: "roadmap"
+  }
+  , hours:{
+	  displayElement: "#google-hours"
+  }
+}
 
-    var namespace = 'googlePlaces';
+class googlePlaces {
+	constructor(element, options) {
+		this.element = element;
+		this.options = Object.assign(defaultGooglePlacesSettings, options);
 
-    $.googlePlaces = function(element, options) {
+		this.init();
+	}
 
-        var defaults = {
-              placeId: 'ChIJN1t_tDeuEmsRUsoyG83frY4' // placeId provided by google api documentation
-            , render: ['reviews']
-            , min_rating: 0
-            , max_rows: 0
-            , map_plug_id: 'map-plug'
-            , rotateTime: false
-            , shorten_names: true
-            , schema:{
-                  displayElement: '#schema'
-                , type: 'Store'
-                , beforeText: 'Google Users Have Rated'
-                , middleText: 'based on'
-                , afterText: 'ratings and reviews'
-                , image: null
-                , priceRange: null
-            }
-            , address:{
-                displayElement: "#google-address"
-              }
-            , phone:{
-                displayElement: "#google-phone"
-            }
-            , staticMap:{
-                  displayElement: "#google-static-map"
-                , width: 512
-                , height: 512
-                , zoom: 17
-                , type: "roadmap"
-            }
-            , hours:{
-                displayElement: "#google-hours"
-            }
-        };
+	init() {
+		this.element.innerHTML = `<div id="${this.options.map_plug_id}"></div>`;
+		initialize_place((place) => {
+			this.options.place_data = place;
 
-        var plugin = this;
+			if (this.options.render.indexOf('rating') > -1) {
+				this.renderRating(plugin.place_data.rating);
+			}
 
-        plugin.settings = {}
+			// render specified sections
+			if (this.options.render.indexOf('reviews') > -1){
+				this.renderReviews(plugin.place_data.reviews);
+			}
 
-        var $element = $(element),
-             element = element;
+			if (this.options.render.indexOf('address') > -1){
+				renderAddress(document.querySelector(this.options.address.displayElement), place.adr_address);
+			}
 
-        plugin.init = function() {
-          plugin.settings = $.extend({}, defaults, options);
-          plugin.settings.schema = $.extend({}, defaults.schema, options.schema);
-          $element.html("<div id='" + plugin.settings.map_plug_id + "'></div>"); // create a plug for google to load data into
-          initialize_place(function(place){
-            plugin.place_data = place;
+			if (this.options.render.indexOf('phone') > -1){
+				renderPhone(document.querySelector(this.options.phone.displayElement), place.formatted_phone_number);
+			}
+			if (plugin.settings.render.indexOf('staticMap') > -1){
+				renderStaticMap(document.querySelector(this.options.staticMap.displayElement), place.formatted_address);
+			}
 
-            // Trigger event before render
-            $element.trigger('beforeRender.' + namespace);
+			if (plugin.settings.render.indexOf('hours') > -1){
+				renderHours(document.querySelector(this.options.settings.hours.displayElement), place.opening_hours);
+			}
 
-            if(plugin.settings.render.indexOf('rating') > -1){
-              renderRating(plugin.place_data.rating);
-            }
-            // render specified sections
-            if(plugin.settings.render.indexOf('reviews') > -1){
-              renderReviews(plugin.place_data.reviews);
-              if(!!plugin.settings.rotateTime) {
-                  initRotation();
-              }
-            }
-            if(plugin.settings.render.indexOf('address') > -1){
-              renderAddress(
-                  capture_element(plugin.settings.address.displayElement)
-                , plugin.place_data.adr_address
-              );
-            }
-            if(plugin.settings.render.indexOf('phone') > -1){
-              renderPhone(
-                  capture_element(plugin.settings.phone.displayElement)
-                , plugin.place_data.formatted_phone_number
-              );
-            }
-            if(plugin.settings.render.indexOf('staticMap') > -1){
-              renderStaticMap(
-                  capture_element(plugin.settings.staticMap.displayElement)
-                , plugin.place_data.formatted_address
-              );
-            }
-            if(plugin.settings.render.indexOf('hours') > -1){
-              renderHours(
-                  capture_element(plugin.settings.hours.displayElement)
-                , plugin.place_data.opening_hours
-              );
-            }
+			// render schema markup
+			addSchemaMarkup(document.querySelector(this.options.schema.displayElement), place);
 
-            // render schema markup
-            addSchemaMarkup(
-                capture_element(plugin.settings.schema.displayElement)
-              , plugin.place_data
-            );
+		});
+	}
 
-            // Trigger event after render
-            $element.trigger('afterRender.' + namespace);
+	initialize_place (c){
+		const map = new window.google.maps.Map(document.getElementById(this.options.map_plug_id));
+		const request = { placeId: this.options.placeId };
+		const service = new window.google.maps.places.PlacesService(map);
 
-          });
-        }
+		service.getDetails(request, function(place, status) {
+			if (status == window.google.maps.places.PlacesServiceStatus.OK) {
+				c(place);
+			}
+		});
+	}
 
-        var capture_element = function(element){
-          if(element instanceof jQuery){
-            return element;
-          }else if(typeof element == 'string'){
-            try{
-              var ele = $(element);
-              if( ele.length ){
-                return ele;
-              }else{
-                throw 'Element [' + element + '] couldnt be found in the DOM. Skipping '+element+' markup generation.';
-              }
-            }catch(e){
-              console.warn(e);
-            }
-          }
-        }
+	sort_by_date (ray) {
+		ray.sort(function(a, b){
+		  var keyA = new Date(a.time),
+		  keyB = new Date(b.time);
+		  // Compare the 2 dates
+		  if(keyA < keyB) return -1;
+		  if(keyA > keyB) return 1;
+		  return 0;
+		});
+		return ray;
+	}
 
-        var initialize_place = function(c){
-          var map = new google.maps.Map(document.getElementById(plugin.settings.map_plug_id));
+	filter_minimum_rating (reviews){
+		for (var i = reviews.length -1; i >= 0; i--) {
+			if (reviews[i].rating < plugin.settings.min_rating){
+				reviews.splice(i,1);
+			}
+		}
+		return reviews;
+	}
 
-          var request = {
-            placeId: plugin.settings.placeId
-          };
+	renderRating (rating){
+		const star = this.renderAverageStars(rating);
+		const html = "<div class='average-rating'><h4>"+star+"</h4></div>";
+		this.element.innerHTML += html;
+	}
 
-          var service = new google.maps.places.PlacesService(map);
+	shorten_name (name) {
+		if (name.split(" ").length > 1) {
+			var xname = "";
+			xname = name.split(" ");
+			return xname[0] + " " + xname[1][0] + ".";
+		}
+	}
 
-          service.getDetails(request, function(place, status) {
-            if (status == google.maps.places.PlacesServiceStatus.OK) {
-              c(place);
-            }
-          });
-        }
+	renderReviews (reviews){
+		reviews = this.sort_by_date(reviews);
+		reviews = this.filter_minimum_rating(reviews);
+		var html = "";
+		var row_count = (this.options.max_rows > 0)? this.options.max_rows - 1 : reviews.length - 1;
+		// make sure the row_count is not greater than available records
+		row_count = (row_count > reviews.length-1)? reviews.length -1 : row_count;
+		for (var i = row_count; i >= 0; i--) {
+			var stars = this.renderStars(reviews[i].rating);
+			var date = this.convertTime(reviews[i].time);
+			if (this.options.shorten_names == true) {
+				var name = this.shorten_name(reviews[i].author_name);
+			} else {
+				var name = reviews[i].author_name + "</span><span class='review-sep'>, </span>";
+			};
+			html += "<div class='review-item'><div class='review-meta'><span class='review-author'>"+name+"<span class='review-date'>"+date+"</span></div>"+stars+"<p class='review-text'>"+reviews[i].text+"</p></div>"
+		};
+		this.element.innerHTML += html;
+	}
 
-        var sort_by_date = function(ray) {
-          ray.sort(function(a, b){
-            var keyA = new Date(a.time),
-            keyB = new Date(b.time);
-            // Compare the 2 dates
-            if(keyA < keyB) return -1;
-            if(keyA > keyB) return 1;
-            return 0;
-          });
-          return ray;
-        }
+	renderHours (element, data){
+		const ulElement = document.createElement("ul");
+		data.weekday_text.forEach((day) => {
+			const liElement = document.createElement("li");
+			liElement.appendChild(document.createTextNode(day));
 
-        var filter_minimum_rating = function(reviews){
-          for (var i = reviews.length -1; i >= 0; i--) {
-            if(reviews[i].rating < plugin.settings.min_rating){
-              reviews.splice(i,1);
-            }
-          }
-          return reviews;
-        }
+			ulElement.appendChild(liElement);
+		});
+		element.append(ulElement);
+	}
 
-        var renderRating = function(rating){
-            var html = "";
-            var star = renderAverageStars(rating);
-            html = "<div class='average-rating'><h4>"+star+"</h4></div>";
-            $element.append(html);
-        }
+	renderStaticMap (element, data){
+		var map = this.options.staticMap;
 
-        var shorten_name = function(name) {
-          if (name.split(" ").length > 1) {
-            var xname = "";
-            xname = name.split(" ");
-            return xname[0] + " " + xname[1][0] + ".";
-          }
-        }
+		const urlQueries = new URLSearchParams({
+			size: `${map.width}x${map.height}`,
+			zoom: map.zoom,
+			maptype: map.type,
+			markers: "size:large%7Ccolor:red%7C"+data
+		})
 
-        var renderReviews = function(reviews){
-          reviews = sort_by_date(reviews);
-          reviews = filter_minimum_rating(reviews);
-          var html = "";
-          var row_count = (plugin.settings.max_rows > 0)? plugin.settings.max_rows - 1 : reviews.length - 1;
-          // make sure the row_count is not greater than available records
-          row_count = (row_count > reviews.length-1)? reviews.length -1 : row_count;
-          for (var i = row_count; i >= 0; i--) {
-            var stars = renderStars(reviews[i].rating);
-            var date = convertTime(reviews[i].time);
-            if(plugin.settings.shorten_names == true) {
-              var name = shorten_name(reviews[i].author_name);
-            } else {
-              var name = reviews[i].author_name + "</span><span class='review-sep'>, </span>";
-            };
-            html = html+"<div class='review-item'><div class='review-meta'><span class='review-author'>"+name+"<span class='review-date'>"+date+"</span></div>"+stars+"<p class='review-text'>"+reviews[i].text+"</p></div>"
-          };
-          $element.append(html);
-        }
+		const imageLink = "https://maps.googleapis.com/maps/api/staticmap" + urlQueries.toString();
+		const imgElement = document.createElement('img')
+		imgElement.src = imageLink;
 
-        var renderHours = function(element, data){
-          if(element instanceof jQuery){
-            var html = "<ul>";
-            data.weekday_text.forEach(function(day){
-              html += "<li>"+day+"</li>";
-            });
-            html += "</ul>";
-            element.append(html);
-          }
-        }
+		element.append(imgElement);
+	}
 
-        var renderStaticMap = function(element, data){
-          if(element instanceof jQuery){
-            var map = plugin.settings.staticMap;
-            element.append(
-              "<img src='https://maps.googleapis.com/maps/api/staticmap"+
-                "?size="+map.width+"x"+map.height+
-                "&zoom="+map.zoom+
-                "&maptype="+map.type+
-                "&markers=size:large%7Ccolor:red%7C"+data+"'>"+
-              "</img>");
-          }
-        }
+	renderAddress (element, data){
+		element.innerHTML += data;
+	}
 
-        var renderAddress = function(element, data){
-          if(element instanceof jQuery){
-            element.append(data);
-          }
-        }
+	renderPhone (element, data){
+		element.innerHTML += data;
+	}
 
-        var renderPhone = function(element, data){
-          if(element instanceof jQuery){
-            element.append(data);
-          }
-        }
+	renderStars = function(rating){
+		let stars = "<div class='review-stars'><ul>";
 
-        var initRotation = function() {
-            var $reviewEls = $element.children('.review-item');
-            var currentIdx = $reviewEls.length > 0 ? 0 : false;
-            $reviewEls.hide();
-            if(currentIdx !== false) {
-                $($reviewEls[currentIdx]).show();
-                setInterval(function(){
-                    if(++currentIdx >= $reviewEls.length) {
-                        currentIdx = 0;
-                    }
-                    $reviewEls.hide();
-                    $($reviewEls[currentIdx]).fadeIn('slow');
-                }, plugin.settings.rotateTime);
-            }
-        }
+		// fill in gold stars
+		for (let i = 0; i < rating; i++) {
+		  stars = stars+"<li><i class='star'></i></li>";
+		};
 
-        var renderStars = function(rating){
-          var stars = "<div class='review-stars'><ul>";
+		// fill in empty stars
+		if(rating < 5){
+		  for (i = 0; i < (5 - rating); i++) {
+			stars = stars+"<li><i class='star inactive'></i></li>";
+		  };
+		}
+		stars = stars+"</ul></div>";
+		return stars;
+	}
 
-          // fill in gold stars
-          for (var i = 0; i < rating; i++) {
-            stars = stars+"<li><i class='star'></i></li>";
-          };
+	renderAverageStars (rating){
+		var stars = "<div class='review-stars'><ul><li><i>"+rating+"&nbsp;</i></li>";
+		var activeStars = parseInt(rating);
+		var inactiveStars = 5 - activeStars;
+		var width = (rating - activeStars) * 100 + '%';
 
-          // fill in empty stars
-          if(rating < 5){
-            for (var i = 0; i < (5 - rating); i++) {
-              stars = stars+"<li><i class='star inactive'></i></li>";
-            };
-          }
-          stars = stars+"</ul></div>";
-          return stars;
-        }
+		// fill in gold stars
+		for (var i = 0; i < activeStars; i++) {
+		  stars += "<li><i class='star'></i></li>";
+		};
 
-        var renderAverageStars = function(rating){
-            var stars = "<div class='review-stars'><ul><li><i>"+rating+"&nbsp;</i></li>";
-            var activeStars = parseInt(rating);
-            var inactiveStars = 5 - activeStars;
-            var width = (rating - activeStars) * 100 + '%';
+		// fill in empty stars
+		if(inactiveStars > 0){
+		  for (var i = 0; i < inactiveStars; i++) {
+			  if (i === 0) {
+				  stars += "<li style='position: relative;'><i class='star inactive'></i><i class='star' style='position: absolute;top: 0;left: 0;overflow: hidden;width: "+width+"'></i></li>";
+			  } else {
+				  stars += "<li><i class='star inactive'></i></li>";
+			  }
+		  };
+		}
+		stars += "</ul></div>";
+		return stars;
+	}
 
-            // fill in gold stars
-            for (var i = 0; i < activeStars; i++) {
-              stars += "<li><i class='star'></i></li>";
-            };
+	convertTime (UNIX_timestamp){
+		var a = new Date(UNIX_timestamp * 1000);
+		var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+		var time = months[a.getMonth()] + ' ' + a.getDate() + ', ' + a.getFullYear();
+		return time;
+	}
 
-            // fill in empty stars
-            if(inactiveStars > 0){
-              for (var i = 0; i < inactiveStars; i++) {
-                  if (i === 0) {
-                      stars += "<li style='position: relative;'><i class='star inactive'></i><i class='star' style='position: absolute;top: 0;left: 0;overflow: hidden;width: "+width+"'></i></li>";
-                  } else {
-                      stars += "<li><i class='star inactive'></i></li>";
-                  }
-              };
-            }
-            stars += "</ul></div>";
-            return stars;
-        }
+	addSchemaMarkup (element, placeData) {
+		var schema = this.options.schema;
+		var schemaMarkup = '<span itemscope="" itemtype="http://schema.org/' + schema.type + '">';
 
-        var convertTime = function(UNIX_timestamp){
-          var a = new Date(UNIX_timestamp * 1000);
-          var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-          var time = months[a.getMonth()] + ' ' + a.getDate() + ', ' + a.getFullYear();
-          return time;
-        }
+		  if(schema.image !== null) {
+			schemaMarkup += this.generateSchemaItemMarkup('image', schema.image);
+		  } else {
+			console.warn('Image is required for some schema types. Visit https://search.google.com/structured-data/testing-tool to test your schema output.');
+		  }
 
-        var addSchemaMarkup = function(element, placeData) {
+		  if(schema.priceRange !== null) {
+			schemaMarkup += this.generateSchemaItemMarkup('priceRange', schema.priceRange);
+		  }
 
-          if(element instanceof jQuery){
-            var schema = plugin.settings.schema;
-            var schemaMarkup = '<span itemscope="" itemtype="http://schema.org/' + schema.type + '">';
+		  schemaMarkup += this.generateSchemaItemMarkup('url', location.origin);
+		  schemaMarkup += this.generateSchemaItemMarkup('telephone', plugin.place_data.formatted_phone_number );
+		  schemaMarkup += this.generateSchemaAddressMarkup();
+		  schemaMarkup += this.generateSchemaRatingMarkup(placeData, schema);
+		  schemaMarkup += '</span>';
 
-            if(schema.image !== null) {
-              schemaMarkup += generateSchemaItemMarkup('image', schema.image);
-            } else {
-              console.warn('Image is required for some schema types. Visit https://search.google.com/structured-data/testing-tool to test your schema output.');
-            }
+		  element.innerHTML = schemaMarkup;
+	}
 
-            if(schema.priceRange !== null) {
-              schemaMarkup += generateSchemaItemMarkup('priceRange', schema.priceRange);
-            }
+	generateSchemaAddressMarkup() {
+		const addressElement = document.createElement('div');
 
-            schemaMarkup += generateSchemaItemMarkup('url', location.origin);
-            schemaMarkup += generateSchemaItemMarkup('telephone', plugin.place_data.formatted_phone_number );
-            schemaMarkup += generateSchemaAddressMarkup();
-            schemaMarkup += generateSchemaRatingMarkup(placeData, schema);
-            schemaMarkup += '</span>';
+		addressElement.setAttribute('itemprop', 'address')
+		addressElement.setAttribute('itemscope', '')
+		addressElement.setAttribute('itemtype', "http://schema.org/PostalAddress")
 
-            element.append(schemaMarkup);
-          }
-        }
+		addressElement.style.display = 'none';
+		addressElement.innerHTML = this.options.place_data.adr_address;
 
-        var generateSchemaAddressMarkup = function() {
-          var $address = $('<div />', {
-              itemprop: "address"
-            , itemscope: ''
-            , itemtype: "http://schema.org/PostalAddress"
-          }).css('display', 'none');
-          $address.append(plugin.place_data.adr_address);
-          $address.children('.street-address').attr('itemprop', 'streetAddress');
-          $address.children('.locality').attr('itemprop', 'addressLocality');
-          $address.children('.region').attr('itemprop', 'addressRegion');
-          $address.children('.postal-code').attr('itemprop', 'postalCode');
-          $address.children('.country-name').attr('itemprop', 'addressCountry');
-          return $address[0].outerHTML;
-        }
+		addressElement.querySelector('.street-address').setAttribute('itemprop', 'streetAddress');
+		addressElement.querySelector('.locality').setAttribute('itemprop', 'addressLocality');
+		addressElement.querySelector('.region').setAttribute('itemprop', 'addressRegion');
+		addressElement.querySelector('.postal-code').setAttribute('itemprop', 'postalCode');
+		addressElement.querySelector('.country-name').setAttribute('itemprop', 'addressCountry');
+		return addressElement.outerHTML;
+	}
 
-        var generateSchemaRatingMarkup = function(placeData, schema) {
-          var reviews = placeData.reviews;
-          var lastIndex = reviews.length - 1;
-          var reviewPointTotal = 0;
+	generateSchemaRatingMarkup (placeData, schema) {
+		var reviews = placeData.reviews;
+		var lastIndex = reviews.length - 1;
+		var reviewPointTotal = 0;
 
-          for (var i = lastIndex; i >= 0; i--) {
-            reviewPointTotal += reviews[i].rating;
-          };
+		for (var i = lastIndex; i >= 0; i--) {
+		  reviewPointTotal += reviews[i].rating;
+		};
 
-          var averageReview = reviewPointTotal / ( reviews.length );
+		var averageReview = reviewPointTotal / ( reviews.length );
 
-          return schema.beforeText + ' <span itemprop="name">' + placeData.name + '</span> '
-          +  '<span itemprop="aggregateRating" itemscope="" itemtype="http://schema.org/AggregateRating">'
-          +    '<span itemprop="ratingValue">' + averageReview.toFixed(2) + '</span>/<span itemprop="bestRating">5</span> '
-          +  schema.middleText + ' <span itemprop="ratingCount">' + reviews.length + '</span> '
-          +  schema.afterText
-          +  '</span>'
-        }
+		return schema.beforeText + ' <span itemprop="name">' + placeData.name + '</span> '
+		+  '<span itemprop="aggregateRating" itemscope="" itemtype="http://schema.org/AggregateRating">'
+		+    '<span itemprop="ratingValue">' + averageReview.toFixed(2) + '</span>/<span itemprop="bestRating">5</span> '
+		+  schema.middleText + ' <span itemprop="ratingCount">' + reviews.length + '</span> '
+		+  schema.afterText
+		+  '</span>'
+	}
 
-        var generateSchemaItemMarkup = function(name, value) {
-          return '<meta itemprop="' + name + '" content="' + value + '">'
-        }
-
-        plugin.init();
-
-    }
-
-    $.fn.googlePlaces = function(options) {
-
-        return this.each(function() {
-            if (undefined == $(this).data(namespace)) {
-                var plugin = new $.googlePlaces(this, options);
-                $(this).data(namespace, plugin);
-            }
-        });
-
-    }
-
-})(jQuery);
+	generateSchemaItemMarkup (name, value) {
+		return '<meta itemprop="' + name + '" content="' + value + '">'
+	}
+}
