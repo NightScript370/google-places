@@ -43,35 +43,35 @@ class googlePlaces {
 
 	init() {
 		this.element.innerHTML = `<div id="${this.options.map_plug_id}"></div>`;
-		initialize_place((place) => {
+		this.initialize_place((place) => {
 			this.options.place_data = place;
 
 			if (this.options.render.indexOf('rating') > -1) {
-				this.renderRating(plugin.place_data.rating);
+				this.renderRating(place.rating);
 			}
 
 			// render specified sections
 			if (this.options.render.indexOf('reviews') > -1){
-				this.renderReviews(plugin.place_data.reviews);
+				this.renderReviews(place.reviews);
 			}
 
 			if (this.options.render.indexOf('address') > -1){
-				renderAddress(document.querySelector(this.options.address.displayElement), place.adr_address);
+				this.renderAddress(document.querySelector(this.options.address.displayElement), place.adr_address);
 			}
 
 			if (this.options.render.indexOf('phone') > -1){
-				renderPhone(document.querySelector(this.options.phone.displayElement), place.formatted_phone_number);
+				this.renderPhone(document.querySelector(this.options.phone.displayElement), place.formatted_phone_number);
 			}
-			if (plugin.settings.render.indexOf('staticMap') > -1){
-				renderStaticMap(document.querySelector(this.options.staticMap.displayElement), place.formatted_address);
+			if (this.options.render.indexOf('staticMap') > -1){
+				this.renderStaticMap(document.querySelector(this.options.staticMap.displayElement), place.formatted_address);
 			}
 
-			if (plugin.settings.render.indexOf('hours') > -1){
-				renderHours(document.querySelector(this.options.settings.hours.displayElement), place.opening_hours);
+			if (this.options.render.indexOf('hours') > -1){
+				this.renderHours(document.querySelector(this.options.settings.hours.displayElement), place.opening_hours);
 			}
 
 			// render schema markup
-			addSchemaMarkup(document.querySelector(this.options.schema.displayElement), place);
+			this.addSchemaMarkup(document.querySelector(this.options.schema.displayElement), place);
 
 		});
 	}
@@ -102,7 +102,7 @@ class googlePlaces {
 
 	filter_minimum_rating (reviews){
 		for (var i = reviews.length -1; i >= 0; i--) {
-			if (reviews[i].rating < plugin.settings.min_rating){
+			if (reviews[i].rating < this.options.min_rating){
 				reviews.splice(i,1);
 			}
 		}
@@ -244,7 +244,7 @@ class googlePlaces {
 		  }
 
 		  schemaMarkup += this.generateSchemaItemMarkup('url', location.origin);
-		  schemaMarkup += this.generateSchemaItemMarkup('telephone', plugin.place_data.formatted_phone_number );
+		  schemaMarkup += this.generateSchemaItemMarkup('telephone', this.options.place_data.formatted_phone_number );
 		  schemaMarkup += this.generateSchemaAddressMarkup();
 		  schemaMarkup += this.generateSchemaRatingMarkup(placeData, schema);
 		  schemaMarkup += '</span>';
